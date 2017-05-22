@@ -7,34 +7,27 @@ using System.Collections.Generic;
 using System.IO;
 //Пространство имён для работы с текстом
 using System.Text;
+using System.Linq;
 
 namespace MRK4forODESystem
 {
     class Program
     {
-        const double c = 1;
+        const double g = 9.809;
 
-        const double H = 3;
-
-        const double kappa = 0.5;
+        const double m = 5;
 
         const double a1 = 1;
 
         const double R = 2;
 
-        static double K1
-        {
-            get
-            {
-                return c*R*kappa / (H*(1+R));
-            }
-        }
+        const double H0 = 3.0 / (2 * Math.PI);
 
-        static double K4
+        static double kappa
         {
             get
             {
-                return -c / (H * H);
+                return -1.0 / m;
             }
         }
 
@@ -67,6 +60,21 @@ namespace MRK4forODESystem
         /// Список значений x5
         /// </summary>
         static List<double> x5;
+
+        /// <summary>
+        /// Список значений beta (коэффициент разделения лучей)
+        /// </summary>
+        static List<double> beta;
+
+        /// <summary>
+        /// Список значений Kp (коэффициент рефракции)
+        /// </summary>
+        static List<double> Kp;
+
+        /// <summary>
+        /// Список значений H (глубина)
+        /// </summary>
+        static List<double> HList;
 
         /// <summary>
         /// Массив (должен содержать пять элементов) коэффициентов МРК4
@@ -160,7 +168,12 @@ namespace MRK4forODESystem
                 //К времени просто добавляется величина шага по времени
                 t.Add(t[i] + h);
             } while (t[i] <= tMax-h);
-
+            //Заполнение списка для beta
+            beta = x4.Select(d => d).ToList();
+            //Заполнение списка для Кр
+            Kp = beta.Select(b => 1.0 / Math.Sqrt(b)).ToList();
+            //Заполнение списка для глубины
+            HList = x1.Select(x => kappa * x + H0).ToList();
             Console.WriteLine("Runge–Kutta method for ODE's system has been completed");
             Console.WriteLine("Writing to file result.txt...");
             //Объявление объекта, выполняющего запись в текстовый файл
@@ -178,6 +191,9 @@ namespace MRK4forODESystem
                 WriteToFile(sw, x3);
                 WriteToFile(sw, x4);
                 WriteToFile(sw, x5);
+                WriteToFile(sw, beta);
+                WriteToFile(sw, Kp);
+                WriteToFile(sw, HList);
                 //После записи открываем файл result.txt
                 System.Diagnostics.Process.Start("result.txt");
             }
@@ -233,6 +249,18 @@ namespace MRK4forODESystem
             {
                 resultName = "x5";
             }
+            else if (res.Equals(beta))
+            {
+                resultName = "beta";
+            }
+            else if (res.Equals(Kp))
+            {
+                resultName = "Kp";
+            }
+            else if (res.Equals(HList))
+            {
+                resultName = "H";
+            }
             else
             {
                 //В случае передечи какого-то иного списка -- ошибка
@@ -282,20 +310,40 @@ namespace MRK4forODESystem
             k4[4] = f5(t[i] + h, x1[i] + h * k3[0], x2[i] + h * k3[1], x3[i] + h * k3[2], x4[i] + h * k3[3], x5[i] + h * k3[4]);
         }
 
+        static double H(double x1)
+        {
+            return kappa * x1 + H0;
+        }
+
+        static double c(double x1)
+        {
+            return Math.Sqrt(g * H(x1));
+        }
+
+        static double K1(double x1)
+        {
+            return (c(x1) / H(x1)) * (R / (1 + R)) * kappa;
+        }
+
+        static double K4(double x1)
+        {
+            return -c(x1) / Math.Pow(H(x1), 2);
+        }
+
         /// <summary>
         /// Функция Р
         /// </summary>
-        static double P(double x3)
+        static double P(double t, double x1, double x2, double x3, double x4, double x5)
         {
-            return -2 * K1 * x3;
+            return -2 * K1(x1) * x3;
         }
 
         /// <summary>
         /// Функция Q
         /// </summary>
-        static double Q(double x3)
+        static double Q(double t, double x1, double x2, double x3, double x4, double x5)
         {
-            return c * K4 * Math.Pow(Math.Sin(x3), 2);
+            return c(x1) * K4(x1) * Math.Pow(Math.Sin(x3), 2);
         }
 
         /// <summary>
@@ -303,7 +351,7 @@ namespace MRK4forODESystem
         /// </summary>
         static double f1(double t, double x1, double x2, double x3, double x4, double x5)
         {
-            return c * Math.Cos(x3);
+            return c(x1) * Math.Cos(x3);
         }
 
         /// <summary>
@@ -311,7 +359,7 @@ namespace MRK4forODESystem
         /// </summary>
         static double f2(double t, double x1, double x2, double x3, double x4, double x5)
         {
-            return c * Math.Sin(x3);
+            return c(x1) * Math.Sin(x3);
         }
 
         /// <summary>
@@ -319,7 +367,7 @@ namespace MRK4forODESystem
         /// </summary>
         static double f3(double t, double x1, double x2, double x3, double x4, double x5)
         {
-            return K1 * Math.Sin(x3);
+            return K1(x1) * Math.Sin(x3);
         }
 
         /// <summary>
@@ -335,7 +383,7 @@ namespace MRK4forODESystem
         /// </summary>
         static double f5(double t, double x1, double x2, double x3, double x4, double x5)
         {
-            return -P(x3) * x5 - Q(x3) * x4;
+            return -P(t,x1,x2,x3,x4,x5) * x5 - Q(t, x1, x2, x3, x4, x5) * x4;
         }
     }
 }

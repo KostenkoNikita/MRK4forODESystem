@@ -7,7 +7,10 @@ using System.Collections.Generic;
 using System.IO;
 //Пространство имён для работы с текстом
 using System.Text;
+//Пространство имён для выполнения запросов LINQ (Select)
 using System.Linq;
+
+using System.Windows.Forms;
 
 namespace MRK4forODESystem
 {
@@ -19,9 +22,11 @@ namespace MRK4forODESystem
 
         const double a1 = 1;
 
-        const double R = 2;
-
         const double H0 = 3.0 / (2 * Math.PI);
+
+        const double lambda = 2;
+
+        const double k = 2 * Math.PI / lambda;
 
         static double kappa
         {
@@ -72,6 +77,11 @@ namespace MRK4forODESystem
         static List<double> Kp;
 
         /// <summary>
+        /// Список значений Kт (коэффициент трансформации)
+        /// </summary>
+        static List<double> Kt;
+
+        /// <summary>
         /// Список значений H (глубина)
         /// </summary>
         static List<double> HList;
@@ -105,6 +115,58 @@ namespace MRK4forODESystem
             get
             {
                 return t == null ? 0 : t.Count - 1;
+            }
+        }
+
+        /// <summary>
+        /// H на бесконечности (формула 2.10)
+        /// </summary>
+        static double Hinf
+        {
+            get
+            {
+                try
+                {
+                    return H(x1.ElementAt(0));
+                }
+                catch (ArgumentNullException)
+                {
+                    MessageBox.Show("Error: x1 list has not initialized. Program will be terminated.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Environment.Exit(1);
+                    return 0;
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    MessageBox.Show("Error: x1 list doesn't contains the first element. Program will be terminated.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Environment.Exit(1);
+                    return 0;
+                }
+                catch
+                {
+                    MessageBox.Show("An error occured. Program will be terminated.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Environment.Exit(1);
+                    return 0;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Знаменатель под корнем в формуле 2.10
+        /// </summary>
+        static double KtNumenator
+        {
+            get
+            {
+                try
+                {
+                    return Math.Tanh(k * Hinf) * (1 + 2 * k * Hinf / (Math.Sinh(2 * k * Hinf)));
+                }
+                catch
+                {
+                    MessageBox.Show("Inner exception in Hinf calculating. Program will be terminated.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Environment.Exit(1);
+                    return 0;
+                }
             }
         }
 
@@ -174,6 +236,9 @@ namespace MRK4forODESystem
             Kp = beta.Select(b => 1.0 / Math.Sqrt(b)).ToList();
             //Заполнение списка для глубины
             HList = x1.Select(x => kappa * x + H0).ToList();
+            //Заполнение списка для Кт
+            Kt = HList.Select(h => Math.Sqrt(KtNumenator/(Math.Tanh(k * h) * (1 + 2 * k * h / (Math.Sinh(2 * k * h)))))).ToList();
+
             Console.WriteLine("Runge–Kutta method for ODE's system has been completed");
             Console.WriteLine("Writing to file result.txt...");
             //Объявление объекта, выполняющего запись в текстовый файл
@@ -192,15 +257,17 @@ namespace MRK4forODESystem
                 WriteToFile(sw, x4);
                 WriteToFile(sw, x5);
                 WriteToFile(sw, beta);
-                WriteToFile(sw, Kp);
                 WriteToFile(sw, HList);
+                WriteToFile(sw, Kp);
+                WriteToFile(sw, Kt);
                 //После записи открываем файл result.txt
                 System.Diagnostics.Process.Start("result.txt");
             }
             //При возникновении ошибки уведомляем об этом
             catch (Exception e)
             {
-                Console.WriteLine("An error occured");
+                MessageBox.Show("An error occured. Program will be terminated.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Environment.Exit(1);
             }
             //В любом случае закрываем поток для записи в файл
             //и останавливаем хронометр
@@ -256,6 +323,10 @@ namespace MRK4forODESystem
             else if (res.Equals(Kp))
             {
                 resultName = "Kp";
+            }
+            else if (res.Equals(Kt))
+            {
+                resultName = "Kt";
             }
             else if (res.Equals(HList))
             {
@@ -315,6 +386,11 @@ namespace MRK4forODESystem
             return kappa * x1 + H0;
         }
 
+        static double R(double x1)
+        {
+            return 2*k*H(x1)/(Math.Sinh(2*k*H(x1)));
+        }
+
         static double c(double x1)
         {
             return Math.Sqrt(g * H(x1));
@@ -322,7 +398,7 @@ namespace MRK4forODESystem
 
         static double K1(double x1)
         {
-            return (c(x1) / H(x1)) * (R / (1 + R)) * kappa;
+            return (c(x1) / H(x1)) * (R(x1) / (1 + R(x1))) * kappa;
         }
 
         static double K4(double x1)

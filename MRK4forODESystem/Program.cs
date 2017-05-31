@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 //Пространство имён для работы с текстом
 using System.Text;
-//Пространство имён для выполнения запросов LINQ (Select)
+//Пространство имён для выполнения запросов LINQ (Select, Zip)
 using System.Linq;
 
 using System.Windows.Forms;
@@ -85,6 +85,11 @@ namespace MRK4forODESystem
         /// Список значений H (глубина)
         /// </summary>
         static List<double> HList;
+
+        /// <summary>
+        /// Список произведений коэффициентов трансормации на коэффициенты рефракции
+        /// </summary>
+        static List<double> KtKp;
 
         /// <summary>
         /// Массив (должен содержать пять элементов) коэффициентов МРК4
@@ -238,6 +243,8 @@ namespace MRK4forODESystem
             HList = x1.Select(x => kappa * x + H0).ToList();
             //Заполнение списка для Кт
             Kt = HList.Select(h => Math.Sqrt(KtNumenator/(Math.Tanh(k * h) * (1 + 2 * k * h / (Math.Sinh(2 * k * h)))))).ToList();
+            //Заполнение списков произведний Кт*Кр
+            KtKp = Kt.Zip(Kp, (kt, kr) => { return kt * kr; }).ToList();
 
             Console.WriteLine("Runge–Kutta method for ODE's system has been completed");
             Console.WriteLine("Writing to file result.txt...");
@@ -260,6 +267,7 @@ namespace MRK4forODESystem
                 WriteToFile(sw, HList);
                 WriteToFile(sw, Kp);
                 WriteToFile(sw, Kt);
+                WriteToFile(sw, KtKp);
                 //После записи открываем файл result.txt
                 System.Diagnostics.Process.Start("result.txt");
             }
@@ -327,6 +335,10 @@ namespace MRK4forODESystem
             else if (res.Equals(Kt))
             {
                 resultName = "Kt";
+            }
+            else if (res.Equals(KtKp))
+            {
+                resultName = "Kt*Kp";
             }
             else if (res.Equals(HList))
             {
